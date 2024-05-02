@@ -26,7 +26,6 @@ const materialSchema = new mongoose.Schema({
   materialId: { type: String, unique: true },
   styleNo: String,
   styleName: String,
-  subCategory: String,
   vendor: String,
   tat: String,
   imported: String,
@@ -37,6 +36,7 @@ const materialSchema = new mongoose.Schema({
   moq: String,
   type: String,
   subtype: String,
+  segment: String,
   images: [String],
   colors: [String],
 });
@@ -48,7 +48,6 @@ app.post("/materials", async (req, res) => {
     materialId,
     styleNo,
     styleName,
-    subCategory,
     vendor,
     tat,
     imported,
@@ -59,13 +58,13 @@ app.post("/materials", async (req, res) => {
     moq,
     type,
     subtype,
+    segment,
     images,
   } = req.body;
   const newMaterial = new Material({
     materialId,
     styleNo,
     styleName,
-    subCategory,
     vendor,
     tat,
     imported,
@@ -76,6 +75,7 @@ app.post("/materials", async (req, res) => {
     moq,
     type,
     subtype,
+    segment,
     images,
   });
   try {
@@ -88,7 +88,7 @@ app.post("/materials", async (req, res) => {
 // Get all materials
 app.get("/materials", async (req, res) => {
   const materials = await Material.find();
-  res.send(materials);
+  res.status(200).send({ count: materials.length, data: materials });
 });
 // Get a specific material by ID
 app.get("/materials/:id", async (req, res) => {
