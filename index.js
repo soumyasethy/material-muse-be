@@ -39,6 +39,7 @@ const materialSchema = new mongoose.Schema({
   segment: String,
   images: [String],
   colors: [String],
+  features: [String],
 });
 const Material = mongoose.model("Material", materialSchema);
 
@@ -60,6 +61,8 @@ app.post("/materials", async (req, res) => {
     subtype,
     segment,
     images,
+    colors,
+    features,
   } = req.body;
   const newMaterial = new Material({
     materialId,
@@ -77,6 +80,8 @@ app.post("/materials", async (req, res) => {
     subtype,
     segment,
     images,
+    colors,
+    features,
   });
   try {
     await newMaterial.save();
