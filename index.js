@@ -104,6 +104,35 @@ app.get("/materials/:id", async (req, res) => {
     res.status(404).send({ message: "Material not found" });
   }
 });
+app.get("/search", async (req, res) => {
+  try {
+    const searchTerm = req.query.q; // Get the search term from query parameter
+
+    // Basic search implementation - customize fields as needed
+    const searchRegex = new RegExp(searchTerm, "i"); // Case-insensitive
+    const query = {
+      $or: [
+        { styleNo: searchRegex },
+        { styleName: searchRegex },
+        { materialComposition: searchRegex },
+        { materialId: searchRegex },
+        { vendor: searchRegex },
+        { tat: searchRegex },
+        { imported: searchRegex },
+        { location: searchRegex },
+        { type: searchRegex },
+        { subtype: searchRegex },
+        { features: searchRegex },
+      ],
+    };
+
+    const results = await Material.find(query);
+    res.json(results);
+  } catch (error) {
+    res.status(500).send({ message: "Error during search" });
+  }
+});
+
 //update
 app.put("/materials/:id", async (req, res) => {
   try {
