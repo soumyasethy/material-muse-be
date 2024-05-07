@@ -157,6 +157,40 @@ app.delete("/materials/:id", async (req, res) => {
     res.status(404).send({ message: "Material not found" });
   }
 });
+
+// filtered
+app.post("/products/filtered", async (req, res) => {
+  try {
+    const filters = req.body.filters;
+    const query = {};
+
+    filters.forEach((filter) => {
+      let filterCondition = {};
+
+      // String comparisons (case-insensitive)
+      if (filter.operator === "contains") {
+        filterCondition[filter.column] = {
+          $regex: new RegExp(filter.value, "i"),
+        };
+
+        // Existing numeric operators
+      } else {
+        filterCondition[filter.column] = { [filter.operator]: filter.value };
+      }
+
+      query.$and
+        ? query.$and.push(filterCondition)
+        : (query.$and = [filterCondition]);
+    });
+
+    const filteredProducts = await Material.find(query);
+    res.json(filteredProducts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error fetching data");
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
