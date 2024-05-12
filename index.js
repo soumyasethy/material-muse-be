@@ -158,36 +158,46 @@ app.delete("/materials/:id", async (req, res) => {
   }
 });
 
-// filtered
 app.post("/products/filtered", async (req, res) => {
   try {
     const filters = req.body.filters;
-    const query = {};
 
-    filters.forEach((filter) => {
-      let filterCondition = {};
-
-      // String comparisons (case-insensitive)
-      if (filter.operator === "contains") {
-        filterCondition[filter.column] = {
-          $regex: new RegExp(filter.value, "i"),
-        };
-
-        // Existing numeric operators
-      } else {
-        filterCondition[filter.column] = { [filter.operator]: filter.value };
+    // Group filters by column
+    const groupedFilters = filters.reduce((acc, filter) => {
+      const column = filter.column;
+      if (!acc[column]) {
+        acc[column] = [];
       }
+      acc[column].push(filter);
+      return acc;
+    }, {});
 
-      query.$and
-        ? query.$and.push(filterCondition)
-        : (query.$and = [filterCondition]);
-    });
+    const query = {
+      $and: Object.keys(groupedFilters).map((column) => {
+        if (groupedFilters[column].length > 1) {
+          // If multiple filters for a column, use $or
+          return {
+            $or: groupedFilters[column].map((filter) => ({
+              [column]: { $regex: filter.value, $options: "i" },
+            })),
+          };
+        } else {
+          // Single filter for a column
+          return {
+            [column]: {
+              $regex: groupedFilters[column][0].value,
+              $options: "i",
+            },
+          };
+        }
+      }),
+    };
 
     const filteredProducts = await Material.find(query);
     res.json(filteredProducts);
   } catch (error) {
-    console.error(error);
-    res.status(500).send("Error fetching data");
+    console.error("Error fetching filtered products:", error);
+    res.status(500).json({ error: "Error fetching filtered products" });
   }
 });
 
