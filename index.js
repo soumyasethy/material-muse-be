@@ -91,10 +91,34 @@ app.post("/materials", async (req, res) => {
   }
 });
 // Get all materials
-app.get("/materials", async (req, res) => {
+/*app.get("/materials", async (req, res) => {
   const materials = await Material.find();
   res.status(200).send({ count: materials.length, data: materials });
+});*/
+app.get("/materials", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1; // Get page number, default to 1
+    const limit = parseInt(req.query.limit) || 10; // Get page size, default to 10
+
+    const skip = (page - 1) * limit; // Calculate how many items to skip
+
+    const materials = await Material.find().skip(skip).limit(limit); // Apply pagination
+
+    const totalMaterials = await Material.countDocuments(); // Get total count
+
+    res.status(200).json({
+      page,
+      limit,
+      totalItems: totalMaterials,
+      totalPages: Math.ceil(totalMaterials / limit),
+      data: materials,
+    });
+  } catch (error) {
+    console.error("Error fetching materials:", error);
+    res.status(500).json({ error: "Error fetching materials" });
+  }
 });
+
 // Get a specific material by ID
 app.get("/materials/:id", async (req, res) => {
   try {
@@ -173,21 +197,27 @@ app.post("/products/filtered", async (req, res) => {
     }, {});
 
     // Construct query, but only if there are actual filters
-    const query = Object.keys(groupedFilters).length > 0 ? {
-      $and: Object.keys(groupedFilters).map((column) => {
-        if (groupedFilters[column].length > 1) {
-          return {
-            $or: groupedFilters[column].map((filter) => ({
-              [column]: { $regex: filter.value, $options: "i" },
-            })),
-          };
-        } else {
-          return {
-            [column]: { $regex: groupedFilters[column][0].value, $options: "i" },
-          };
-        }
-      }),
-    } : {}; // Empty query if no filters
+    const query =
+      Object.keys(groupedFilters).length > 0
+        ? {
+            $and: Object.keys(groupedFilters).map((column) => {
+              if (groupedFilters[column].length > 1) {
+                return {
+                  $or: groupedFilters[column].map((filter) => ({
+                    [column]: { $regex: filter.value, $options: "i" },
+                  })),
+                };
+              } else {
+                return {
+                  [column]: {
+                    $regex: groupedFilters[column][0].value,
+                    $options: "i",
+                  },
+                };
+              }
+            }),
+          }
+        : {}; // Empty query if no filters
 
     const filteredProducts = await Material.find(query);
     res.json(filteredProducts);
@@ -196,7 +226,6 @@ app.post("/products/filtered", async (req, res) => {
     res.status(500).json({ error: "Error fetching filtered products" });
   }
 });
-
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
