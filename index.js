@@ -161,6 +161,10 @@ app.delete("/materials/:id", async (req, res) => {
 app.post("/products/filtered", async (req, res) => {
   try {
     const filters = req.body.filters;
+    if (filters.length === 0) {
+      const materials = await Material.find();
+      res.status(200).send(materials);
+    }
 
     // Group filters by column
     const groupedFilters = filters.reduce((acc, filter) => {
