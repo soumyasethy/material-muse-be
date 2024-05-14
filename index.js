@@ -5,9 +5,15 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3001;
 require("dotenv").config(); // Load environment variables from .env
+app.use(
+  cors({
+    origin: `http://localhost:${port}`,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  })
+);
 
+// Enable CORS for all origins
 app.use(express.json());
-app.use(cors({ origin: "http://localhost:3001" })); // Enable CORS for all origins
 
 // Connect to MongoDB
 mongoose
@@ -85,17 +91,22 @@ app.post("/materials", async (req, res) => {
   });
   try {
     await newMaterial.save();
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
+
     res.status(201).send(newMaterial);
   } catch (error) {
     res.status(400).send(error);
   }
 });
-// Get all materials
-/*app.get("/materials", async (req, res) => {
-  const materials = await Material.find();
-  res.status(200).send({ count: materials.length, data: materials });
-});*/
 app.get("/materials", async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1; // Get page number, default to 1
@@ -106,7 +117,11 @@ app.get("/materials", async (req, res) => {
     const materials = await Material.find().skip(skip).limit(limit); // Apply pagination
 
     const totalMaterials = await Material.countDocuments(); // Get total count
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.status(200).json({
       page,
       limit,
@@ -124,7 +139,11 @@ app.get("/materials", async (req, res) => {
 app.get("/materials/:id", async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.send(material);
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -161,7 +180,11 @@ app.get("/search", async (req, res) => {
       Material.find(query).skip(skip).limit(limit),
       Material.countDocuments(query), // Count documents matching the search
     ]);
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.json({
       page,
       limit,
@@ -184,7 +207,11 @@ app.put("/materials/:id", async (req, res) => {
         new: true,
       }
     );
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.send(updatedMaterial);
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -194,7 +221,11 @@ app.put("/materials/:id", async (req, res) => {
 app.delete("/materials/:id", async (req, res) => {
   try {
     await Material.findByIdAndDelete(req.params.id);
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.send({ message: "Material deleted successfully" });
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -247,7 +278,11 @@ app.post("/products/filtered", async (req, res) => {
       Material.find(query).skip(skip).limit(limit),
       Material.countDocuments(query), // Count documents matching the filters
     ]);
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     res.json({
       page,
       limit,
@@ -275,7 +310,11 @@ app.get("/api/proxy-image", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
     res.setHeader("Content-Type", contentType);
-    res.set('Access-Control-Allow-Origin', '*');
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
     // Pipe the converted stream to the response
     Readable.fromWeb(response.body).pipe(res);
   } catch (error) {
