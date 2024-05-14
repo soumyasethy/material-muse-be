@@ -1,12 +1,12 @@
 // app.js
 const express = require("express");
 const mongoose = require("mongoose");
-require("dotenv").config(); // Load environment variables from .env
-
+const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3000;
+require("dotenv").config(); // Load environment variables from .env
+
 app.use(express.json());
-const cors = require("cors");
 app.use(cors({ origin: "http://localhost:3001" })); // Enable CORS for all origins
 
 // Connect to MongoDB
