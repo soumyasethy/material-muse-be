@@ -85,6 +85,7 @@ app.post("/materials", async (req, res) => {
   });
   try {
     await newMaterial.save();
+    res.set('Access-Control-Allow-Origin', '*');
     res.status(201).send(newMaterial);
   } catch (error) {
     res.status(400).send(error);
@@ -105,7 +106,7 @@ app.get("/materials", async (req, res) => {
     const materials = await Material.find().skip(skip).limit(limit); // Apply pagination
 
     const totalMaterials = await Material.countDocuments(); // Get total count
-
+    res.set('Access-Control-Allow-Origin', '*');
     res.status(200).json({
       page,
       limit,
@@ -123,6 +124,7 @@ app.get("/materials", async (req, res) => {
 app.get("/materials/:id", async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
+    res.set('Access-Control-Allow-Origin', '*');
     res.send(material);
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -159,7 +161,7 @@ app.get("/search", async (req, res) => {
       Material.find(query).skip(skip).limit(limit),
       Material.countDocuments(query), // Count documents matching the search
     ]);
-
+    res.set('Access-Control-Allow-Origin', '*');
     res.json({
       page,
       limit,
@@ -182,6 +184,7 @@ app.put("/materials/:id", async (req, res) => {
         new: true,
       }
     );
+    res.set('Access-Control-Allow-Origin', '*');
     res.send(updatedMaterial);
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -191,6 +194,7 @@ app.put("/materials/:id", async (req, res) => {
 app.delete("/materials/:id", async (req, res) => {
   try {
     await Material.findByIdAndDelete(req.params.id);
+    res.set('Access-Control-Allow-Origin', '*');
     res.send({ message: "Material deleted successfully" });
   } catch (error) {
     res.status(404).send({ message: "Material not found" });
@@ -243,7 +247,7 @@ app.post("/products/filtered", async (req, res) => {
       Material.find(query).skip(skip).limit(limit),
       Material.countDocuments(query), // Count documents matching the filters
     ]);
-
+    res.set('Access-Control-Allow-Origin', '*');
     res.json({
       page,
       limit,
@@ -271,7 +275,7 @@ app.get("/api/proxy-image", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
     res.setHeader("Content-Type", contentType);
-
+    res.set('Access-Control-Allow-Origin', '*');
     // Pipe the converted stream to the response
     Readable.fromWeb(response.body).pipe(res);
   } catch (error) {
