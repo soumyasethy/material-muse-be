@@ -3,7 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 require("dotenv").config(); // Load environment variables from .env
 
 app.use(express.json());
@@ -150,24 +150,21 @@ app.get("/search", async (req, res) => {
       ],
     };
 
-    /*** pagination Logic ***/
-    const page = parseInt(req.query.page) || 1; // Get page number, default to 1
-    const limit = parseInt(req.query.limit) || 10; // Get page size, default to 10
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    const skip = (page - 1) * limit; // Calculate how many items to skip
+    // Fetch search results and their total count in parallel
+    const [materials, searchResultsCount] = await Promise.all([
+      Material.find(query).skip(skip).limit(limit),
+      Material.countDocuments(query), // Count documents matching the search
+    ]);
 
-    const materials = await Material.find(query).skip(skip).limit(limit); // Apply pagination
-
-    const totalMaterials = await Material.countDocuments(); // Get total count
-
-    /*** end of pagination Logic ***/
-
-    // const results = await Material.find(query);
     res.json({
       page,
       limit,
-      totalMaterials,
-      totalPages: Math.ceil(totalMaterials / limit),
+      totalMaterials: searchResultsCount, // Total matching the search term
+      totalPages: Math.ceil(searchResultsCount / limit),
       data: materials,
     });
   } catch (error) {
@@ -237,24 +234,21 @@ app.post("/products/filtered", async (req, res) => {
           }
         : {}; // Empty query if no filters
 
-    /*** pagination Logic ***/
-    const page = parseInt(req.query.page) || 1; // Get page number, default to 1
-    const limit = parseInt(req.query.limit) || 10; // Get page size, default to 10
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    const skip = (page - 1) * limit; // Calculate how many items to skip
+    // Fetch filtered materials and their total count in parallel
+    const [materials, filteredCount] = await Promise.all([
+      Material.find(query).skip(skip).limit(limit),
+      Material.countDocuments(query), // Count documents matching the filters
+    ]);
 
-    const materials = await Material.find(query).skip(skip).limit(limit); // Apply pagination
-
-    const totalMaterials = await Material.countDocuments(); // Get total count
-
-    /*** end of pagination Logic ***/
-
-    // const results = await Material.find(query);
     res.json({
       page,
       limit,
-      totalMaterials,
-      totalPages: Math.ceil(totalMaterials / limit),
+      totalMaterials: filteredCount, // Total matching the filter criteria
+      totalPages: Math.ceil(filteredCount / limit),
       data: materials,
     });
   } catch (error) {
