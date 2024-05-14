@@ -7,7 +7,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 app.use(express.json());
 const cors = require("cors");
-app.use(cors()); // Enable CORS for all origins
+app.use(cors({ origin: "http://localhost:3001" })); // Enable CORS for all origins
 
 // Connect to MongoDB
 mongoose
@@ -150,8 +150,26 @@ app.get("/search", async (req, res) => {
       ],
     };
 
-    const results = await Material.find(query);
-    res.json(results);
+    /*** pagination Logic ***/
+    const page = parseInt(req.query.page) || 1; // Get page number, default to 1
+    const limit = parseInt(req.query.limit) || 10; // Get page size, default to 10
+
+    const skip = (page - 1) * limit; // Calculate how many items to skip
+
+    const materials = await Material.find(query).skip(skip).limit(limit); // Apply pagination
+
+    const totalMaterials = await Material.countDocuments(); // Get total count
+
+    /*** end of pagination Logic ***/
+
+    // const results = await Material.find(query);
+    res.json({
+      page,
+      limit,
+      totalMaterials,
+      totalPages: Math.ceil(totalMaterials / limit),
+      data: materials,
+    });
   } catch (error) {
     res.status(500).send({ message: "Error during search" });
   }
@@ -219,11 +237,52 @@ app.post("/products/filtered", async (req, res) => {
           }
         : {}; // Empty query if no filters
 
-    const filteredProducts = await Material.find(query);
-    res.json(filteredProducts);
+    /*** pagination Logic ***/
+    const page = parseInt(req.query.page) || 1; // Get page number, default to 1
+    const limit = parseInt(req.query.limit) || 10; // Get page size, default to 10
+
+    const skip = (page - 1) * limit; // Calculate how many items to skip
+
+    const materials = await Material.find(query).skip(skip).limit(limit); // Apply pagination
+
+    const totalMaterials = await Material.countDocuments(); // Get total count
+
+    /*** end of pagination Logic ***/
+
+    // const results = await Material.find(query);
+    res.json({
+      page,
+      limit,
+      totalMaterials,
+      totalPages: Math.ceil(totalMaterials / limit),
+      data: materials,
+    });
   } catch (error) {
     console.error("Error fetching filtered products:", error);
     res.status(500).json({ error: "Error fetching filtered products" });
+  }
+});
+
+app.get("/api/proxy-image", async (req, res) => {
+  const url = req.query.url; // Get the image URL from the query parameter
+
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch image: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const contentType = response.headers.get("content-type");
+    res.setHeader("Content-Type", contentType);
+
+    // Pipe the converted stream to the response
+    Readable.fromWeb(response.body).pipe(res);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error fetching image");
   }
 });
 
