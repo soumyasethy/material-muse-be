@@ -5,14 +5,14 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3001;
 require("dotenv").config(); // Load environment variables from .env
+
+// Enable CORS for all origins
 app.use(
   cors({
     origin: `http://localhost:${port}`,
     methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
-
-// Enable CORS for all origins
 app.use(express.json());
 
 // Connect to MongoDB
@@ -149,6 +149,42 @@ app.get("/materials/:id", async (req, res) => {
     res.status(404).send({ message: "Material not found" });
   }
 });
+
+//update
+app.put("/materials/:id", async (req, res) => {
+  try {
+    const updatedMaterial = await Material.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+      }
+    );
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
+    res.send(updatedMaterial);
+  } catch (error) {
+    res.status(404).send({ message: "Material not found" });
+  }
+});
+//delete
+app.delete("/materials/:id", async (req, res) => {
+  try {
+    await Material.findByIdAndDelete(req.params.id);
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
+    res.send({ message: "Material deleted successfully" });
+  } catch (error) {
+    res.status(404).send({ message: "Material not found" });
+  }
+});
+
 app.get("/search", async (req, res) => {
   try {
     const searchTerm = req.query.q; // Get the search term from query parameter
@@ -194,41 +230,6 @@ app.get("/search", async (req, res) => {
     });
   } catch (error) {
     res.status(500).send({ message: "Error during search" });
-  }
-});
-
-//update
-app.put("/materials/:id", async (req, res) => {
-  try {
-    const updatedMaterial = await Material.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      {
-        new: true,
-      }
-    );
-    res.header("Access-Control-Allow-Origin", [
-      `http://localhost:${port}`,
-      // "https://your-production-domain.com",
-    ]);
-    res.header("Access-Control-Allow-Credentials", true);
-    res.send(updatedMaterial);
-  } catch (error) {
-    res.status(404).send({ message: "Material not found" });
-  }
-});
-//delete
-app.delete("/materials/:id", async (req, res) => {
-  try {
-    await Material.findByIdAndDelete(req.params.id);
-    res.header("Access-Control-Allow-Origin", [
-      `http://localhost:${port}`,
-      // "https://your-production-domain.com",
-    ]);
-    res.header("Access-Control-Allow-Credentials", true);
-    res.send({ message: "Material deleted successfully" });
-  } catch (error) {
-    res.status(404).send({ message: "Material not found" });
   }
 });
 
@@ -320,6 +321,99 @@ app.get("/api/proxy-image", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).send("Error fetching image");
+  }
+});
+
+app.get("/", async (req, res) => {
+  try {
+    const searchTerm = req.query.q;
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get filters from query parameters
+    // const filters = req.body.filters || [];
+    const filters = [];
+    for (const key in req.query) {
+      if (key.startsWith("filters")) {
+        const match = key.match(/\[(\d+)\]\[(column|value)\]/);
+        if (match) {
+          const index = parseInt(match[1]);
+          const property = match[2];
+          filters[index] = filters[index] || {}; // Initialize if not exists
+          filters[index][property] = req.query[key];
+        }
+      }
+    }
+
+    const query = {};
+    if (searchTerm) {
+      const searchRegex = new RegExp(searchTerm, "i");
+      query.$or = [
+        { styleNo: searchRegex },
+        { styleName: searchRegex },
+        { materialComposition: searchRegex },
+        { materialId: searchRegex },
+        { vendor: searchRegex },
+        { tat: searchRegex },
+        { imported: searchRegex },
+        { location: searchRegex },
+        { type: searchRegex },
+        { subtype: searchRegex },
+        { features: searchRegex },
+      ];
+    }
+
+    if (filters.length > 0) {
+      // Group filters by column
+      const groupedFilters = filters.reduce((acc, filter) => {
+        const column = filter.column;
+        if (!acc[column]) {
+          acc[column] = [];
+        }
+        acc[column].push(filter);
+        return acc;
+      }, {});
+
+      query.$and = Object.keys(groupedFilters).map((column) => {
+        if (groupedFilters[column].length > 1) {
+          return {
+            $or: groupedFilters[column].map((filter) => ({
+              [column]: { $regex: filter.value, $options: "i" },
+            })),
+          };
+        } else {
+          return {
+            [column]: {
+              $regex: groupedFilters[column][0].value,
+              $options: "i",
+            },
+          };
+        }
+      });
+    }
+
+    const [materials, totalCount] = await Promise.all([
+      Material.find(query).skip(skip).limit(limit),
+      Material.countDocuments(query),
+    ]);
+
+    res.header("Access-Control-Allow-Origin", [
+      `http://localhost:${port}`,
+      // "https://your-production-domain.com",
+    ]);
+    res.header("Access-Control-Allow-Credentials", true);
+    res.json({
+      page,
+      limit,
+      totalMaterials: totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      data: materials,
+    });
+  } catch (error) {
+    console.error("Error fetching materials:", error);
+    res.status(500).json({ error: "Error fetching materials" });
   }
 });
 
