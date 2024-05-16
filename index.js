@@ -418,6 +418,44 @@ app.get("/", async (req, res) => {
       .json({ error: "Error fetching materials", details: error.message }); // Send detailed error to frontend
   }
 });
+// Assuming you're using Mongoose for MongoDB interactions
+app.get("/filter-options", async (req, res) => {
+  try {
+    const filterableFields = [
+      // "materialId",
+      "styleNo",
+      "styleName",
+      "vendor",
+      "tat",
+      "imported",
+      "location",
+      "materialComposition",
+      "weight",
+      "cost",
+      "moq",
+      "type",
+      "subtype",
+      "segment",
+      // "images",
+      "colors",
+      "features",
+    ]; // List of fields you want to filter on
+
+    const distinctValues = await Promise.all(
+      filterableFields.map((field) => Material.distinct(field)) // Fetch distinct values for each field
+    );
+
+    const filterOptions = {};
+    filterableFields.forEach((field, index) => {
+      filterOptions[field] = distinctValues[index];
+    });
+
+    res.json(filterOptions); // Send filter options to frontend
+  } catch (error) {
+    console.error("Error fetching filter options:", error);
+    res.status(500).json({ error: "Error fetching filter options" });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
