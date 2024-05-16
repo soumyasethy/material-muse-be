@@ -332,22 +332,27 @@ app.get("/", async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
+    // Handle Sorting (if provided)
+    const sortField = req.query.sortField || "_id"; // Default to _id
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const sortOptions = { [sortField]: sortOrder };
+
     // Get filters from query parameters
-    // const filters = req.body.filters || [];
     const filters = [];
     for (const key in req.query) {
-      if (key.startsWith("filters")) {
-        const match = key.match(/\[(\d+)\]\[(column|value)\]/);
-        if (match) {
-          const index = parseInt(match[1]);
-          const property = match[2];
-          filters[index] = filters[index] || {}; // Initialize if not exists
-          filters[index][property] = req.query[key];
-        }
+      if (!["page", "limit", "q", "sortField", "sortOrder"].includes(key)) {
+        // Exclude parameters other than filters
+        const values = req.query[key].split(",").map(decodeURIComponent);
+        values.forEach((value) => {
+          filters.push({ column: key, value });
+        });
       }
     }
 
+    // Build the query based on searchTerm and filters
     const query = {};
+
+    // Handle search term
     if (searchTerm) {
       const searchRegex = new RegExp(searchTerm, "i");
       query.$or = [
@@ -365,43 +370,37 @@ app.get("/", async (req, res) => {
       ];
     }
 
+    // Handle filters
     if (filters.length > 0) {
-      // Group filters by column
       const groupedFilters = filters.reduce((acc, filter) => {
         const column = filter.column;
         if (!acc[column]) {
           acc[column] = [];
         }
-        acc[column].push(filter);
+        acc[column].push(filter.value); // Push only the value to the array
         return acc;
       }, {});
 
-      query.$and = Object.keys(groupedFilters).map((column) => {
-        if (groupedFilters[column].length > 1) {
-          return {
-            $or: groupedFilters[column].map((filter) => ({
-              [column]: { $regex: filter.value, $options: "i" },
-            })),
-          };
-        } else {
-          return {
-            [column]: {
-              $regex: groupedFilters[column][0].value,
-              $options: "i",
-            },
-          };
-        }
+      const filterConditions = Object.keys(groupedFilters).map((column) => {
+        return {
+          [column]: {
+            $in: groupedFilters[column].map((value) => new RegExp(value, "i")),
+          }, // use $in for multiple values
+        };
       });
+      query.$and = filterConditions;
     }
 
+    // Fetch, sort, and count materials
     const [materials, totalCount] = await Promise.all([
-      Material.find(query).skip(skip).limit(limit),
+      Material.find(query).sort(sortOptions).skip(skip).limit(limit),
       Material.countDocuments(query),
     ]);
 
+    // ... rest of your code
     res.header("Access-Control-Allow-Origin", [
       `http://localhost:${port}`,
-      // "https://your-production-domain.com",
+      // Add your production domain here if needed
     ]);
     res.header("Access-Control-Allow-Credentials", true);
     res.json({
@@ -413,7 +412,10 @@ app.get("/", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching materials:", error);
-    res.status(500).json({ error: "Error fetching materials" });
+    console.error("Stack Trace:", error.stack);
+    res
+      .status(500)
+      .json({ error: "Error fetching materials", details: error.message }); // Send detailed error to frontend
   }
 });
 
