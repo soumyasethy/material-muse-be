@@ -324,100 +324,6 @@ app.get("/api/proxy-image", async (req, res) => {
   }
 });
 
-app.get("/", async (req, res) => {
-  try {
-    const searchTerm = req.query.q;
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-
-    // Handle Sorting (if provided)
-    const sortField = req.query.sortField || "_id"; // Default to _id
-    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
-    const sortOptions = { [sortField]: sortOrder };
-
-    // Get filters from query parameters
-    const filters = [];
-    for (const key in req.query) {
-      if (!["page", "limit", "q", "sortField", "sortOrder"].includes(key)) {
-        // Exclude parameters other than filters
-        const values = req.query[key].split(",").map(decodeURIComponent);
-        values.forEach((value) => {
-          filters.push({ column: key, value });
-        });
-      }
-    }
-
-    // Build the query based on searchTerm and filters
-    const query = {};
-
-    // Handle search term
-    if (searchTerm) {
-      const searchRegex = new RegExp(searchTerm, "i");
-      query.$or = [
-        { styleNo: searchRegex },
-        { styleName: searchRegex },
-        { materialComposition: searchRegex },
-        { materialId: searchRegex },
-        { vendor: searchRegex },
-        { tat: searchRegex },
-        { imported: searchRegex },
-        { location: searchRegex },
-        { type: searchRegex },
-        { subtype: searchRegex },
-        { features: searchRegex },
-      ];
-    }
-
-    // Handle filters
-    if (filters.length > 0) {
-      const groupedFilters = filters.reduce((acc, filter) => {
-        const column = filter.column;
-        if (!acc[column]) {
-          acc[column] = [];
-        }
-        acc[column].push(filter.value); // Push only the value to the array
-        return acc;
-      }, {});
-
-      const filterConditions = Object.keys(groupedFilters).map((column) => {
-        return {
-          [column]: {
-            $in: groupedFilters[column].map((value) => new RegExp(value, "i")),
-          }, // use $in for multiple values
-        };
-      });
-      query.$and = filterConditions;
-    }
-
-    // Fetch, sort, and count materials
-    const [materials, totalCount] = await Promise.all([
-      Material.find(query).sort(sortOptions).skip(skip).limit(limit),
-      Material.countDocuments(query),
-    ]);
-
-    // ... rest of your code
-    res.header("Access-Control-Allow-Origin", [
-      `http://localhost:${port}`,
-      // Add your production domain here if needed
-    ]);
-    res.header("Access-Control-Allow-Credentials", true);
-    res.json({
-      page,
-      limit,
-      totalMaterials: totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-      data: materials,
-    });
-  } catch (error) {
-    console.error("Error fetching materials:", error);
-    console.error("Stack Trace:", error.stack);
-    res
-      .status(500)
-      .json({ error: "Error fetching materials", details: error.message }); // Send detailed error to frontend
-  }
-});
 // Assuming you're using Mongoose for MongoDB interactions
 app.get("/filter-options", async (req, res) => {
   try {
@@ -454,6 +360,137 @@ app.get("/filter-options", async (req, res) => {
   } catch (error) {
     console.error("Error fetching filter options:", error);
     res.status(500).json({ error: "Error fetching filter options" });
+  }
+});
+
+app.get("/", async (req, res) => {
+  try {
+    // 1. Get Query Parameters
+    const searchTerm = req.query.q;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const sortField = req.query.sortField || "_id";
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const sortOptions = { [sortField]: sortOrder };
+
+    // 2. Extract Filter Columns and Values
+    const filters = [];
+    for (const key in req.query) {
+      if (!["page", "limit", "q", "sortField", "sortOrder"].includes(key)) {
+        const column = key.toLowerCase();
+        filters.push({
+          column,
+          values: req.query[key].split(",").map(decodeURIComponent),
+        });
+      }
+    }
+
+    // 3. Build MongoDB Query
+    const query = {};
+
+    // Handle search term
+    if (searchTerm) {
+      const searchRegex = new RegExp(searchTerm, "i");
+      query.$or = [
+        { styleNo: searchRegex },
+        { styleName: searchRegex },
+        { materialComposition: searchRegex },
+        { materialId: searchRegex },
+        { vendor: searchRegex },
+        { tat: searchRegex },
+        { imported: searchRegex },
+        { location: searchRegex },
+        { type: searchRegex },
+        { subtype: searchRegex },
+        { features: searchRegex },
+      ];
+    }
+
+    // Handle filters
+    if (filters.length > 0) {
+      let andConditions = [];
+      filters.forEach((filter) => {
+        let filterValues = filter.values.map((value) => new RegExp(value, "i")); // Case-insensitive regex
+        let filterConditions = { [filter.column]: { $in: filterValues } };
+        andConditions.push(filterConditions);
+      });
+      query.$and = andConditions;
+    }
+
+    // 4. Fetch, Sort, and Count Materials
+    const [materials, totalCount] = await Promise.all([
+      Material.find(query).sort(sortOptions).skip(skip).limit(limit),
+      Material.countDocuments(query),
+    ]);
+
+    // 5. Fetch Distinct Values for All Filterable Columns
+    const filterableFields = [
+      "styleNo",
+      "styleName",
+      "vendor",
+      // "tat",
+      // "imported",
+      "location",
+      "materialComposition",
+      // "weight",
+      // "cost",
+      // "moq",
+      "type",
+      "subtype",
+      "segment",
+      "colors",
+      // "features",
+    ];
+    const filterOptions = {};
+    await Promise.all(
+      filterableFields.map(async (column) => {
+        const distinctValues = await Material.distinct(column);
+        filterOptions[column] = distinctValues.map((value) => ({
+          value: value,
+          selected: filters.some(
+            (f) => f.column === column && f.values.includes(value)
+          ), // Check if selected
+        }));
+      })
+    );
+
+    // 6. Send Response with Materials and Filter Options
+    res.json({
+      page,
+      limit,
+      totalMaterials: totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      data: materials,
+      filterOptions: filterOptions, // Include filter options in the response
+    });
+  } catch (error) {
+    // Enhanced Error Logging
+    if (error instanceof mongoose.Error) {
+      // Handle Mongoose-specific errors (e.g., validation, cast errors)
+      console.error("Mongoose Error:", error.name, error.message);
+      res.status(500).json({
+        error: "Database Error",
+        details: {
+          name: error.name,
+          message: error.message,
+        },
+      });
+    } else if (error instanceof Error) {
+      // Handle general JavaScript errors
+      console.error("Server Error:", error.name, error.message, error.stack);
+      res.status(500).json({
+        error: "Server Error",
+        details: {
+          name: error.name,
+          message: error.message,
+        },
+      });
+    } else {
+      // Handle unexpected errors
+      console.error("Unknown Error:", error);
+      res.status(500).json({ error: "Unknown Error" });
+    }
   }
 });
 
