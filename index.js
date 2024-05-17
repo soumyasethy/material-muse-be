@@ -362,31 +362,35 @@ app.get("/filter-options", async (req, res) => {
     res.status(500).json({ error: "Error fetching filter options" });
   }
 });
-
 app.get("/", async (req, res) => {
   try {
-    // 1. Get Query Parameters
-    const searchTerm = req.query.q;
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    const sortField = req.query.sortField || "_id";
-    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
-    const sortOptions = { [sortField]: sortOrder };
+    console.log("Received Query Parameters:", req.query);
 
-    // 2. Extract Filter Columns and Values
+    const searchTerm = req.query.q; // Get search term (optional)
+    const page = parseInt(req.query.page) || 1; // Page number (default: 1)
+    const limit = parseInt(req.query.limit) || 10; // Items per page (default: 10)
+    const skip = (page - 1) * limit;
+    const sortField = req.query.sortField || "_id"; // Sort field (default: _id)
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1; // Sort order (default: asc)
+    const sortOptions = { [sortField]: sortOrder }; // Sorting options object
+
+    // 1. Extract Filter Columns and Values
     const filters = [];
     for (const key in req.query) {
       if (!["page", "limit", "q", "sortField", "sortOrder"].includes(key)) {
-        const column = key.toLowerCase();
+        // Ensure we have an array for the values
         filters.push({
-          column,
-          values: req.query[key].split(",").map(decodeURIComponent),
+          column: key,
+          values: req.query[key]
+            .split(",")
+            .map(decodeURIComponent)
+            .map((value) => value.trim()),
         });
       }
     }
+    console.log("Filters after processing:", filters);
 
-    // 3. Build MongoDB Query
+    // 2. Build MongoDB Query
     const query = {};
 
     // Handle search term
@@ -409,22 +413,24 @@ app.get("/", async (req, res) => {
 
     // Handle filters
     if (filters.length > 0) {
-      let andConditions = [];
-      filters.forEach((filter) => {
-        let filterValues = filter.values.map((value) => new RegExp(value, "i")); // Case-insensitive regex
-        let filterConditions = { [filter.column]: { $in: filterValues } };
-        andConditions.push(filterConditions);
-      });
-      query.$and = andConditions;
+      const filterConditions = filters.map((filter) => ({
+        [filter.column]: {
+          $in: filter.values.map((value) => new RegExp(value, "i")), // Case-insensitive regex
+        },
+      }));
+      query.$and = filterConditions;
     }
 
-    // 4. Fetch, Sort, and Count Materials
+    // Log the final query before executing it
+    console.log("MongoDB Query:", JSON.stringify(query, null, 2)); // Pretty-print JSON
+
+    // 3. Fetch, Sort, and Count Materials
     const [materials, totalCount] = await Promise.all([
       Material.find(query).sort(sortOptions).skip(skip).limit(limit),
       Material.countDocuments(query),
     ]);
 
-    // 5. Fetch Distinct Values for All Filterable Columns
+    // 4. Fetch Distinct Values for All Filterable Columns
     const filterableFields = [
       "styleNo",
       "styleName",
@@ -442,55 +448,41 @@ app.get("/", async (req, res) => {
       "colors",
       // "features",
     ];
+    // Fetch Distinct Values for Filtered Columns (based on query)
     const filterOptions = {};
     await Promise.all(
       filterableFields.map(async (column) => {
-        const distinctValues = await Material.distinct(column);
-        filterOptions[column] = distinctValues.map((value) => ({
-          value: value,
-          selected: filters.some(
+        filterOptions[column] = {}; // Initialize as an empty object for each column
+
+        const distinctValues = await Material.distinct(column, query);
+        distinctValues.forEach((value) => {
+          filterOptions[column][value] = filters.some(
             (f) => f.column === column && f.values.includes(value)
-          ), // Check if selected
-        }));
+          );
+        });
+
+        // Ensure all filterable values are included
+        if (Object.keys(filterOptions[column]).length === 0) {
+          filterOptions[column] = { none: false }; // Add a 'none' option if no values exist
+        }
       })
     );
 
-    // 6. Send Response with Materials and Filter Options
+    // 5. Send the Response
     res.json({
       page,
       limit,
       totalMaterials: totalCount,
       totalPages: Math.ceil(totalCount / limit),
       data: materials,
-      filterOptions: filterOptions, // Include filter options in the response
+      filterOptions: filterOptions,
     });
   } catch (error) {
-    // Enhanced Error Logging
-    if (error instanceof mongoose.Error) {
-      // Handle Mongoose-specific errors (e.g., validation, cast errors)
-      console.error("Mongoose Error:", error.name, error.message);
-      res.status(500).json({
-        error: "Database Error",
-        details: {
-          name: error.name,
-          message: error.message,
-        },
-      });
-    } else if (error instanceof Error) {
-      // Handle general JavaScript errors
-      console.error("Server Error:", error.name, error.message, error.stack);
-      res.status(500).json({
-        error: "Server Error",
-        details: {
-          name: error.name,
-          message: error.message,
-        },
-      });
-    } else {
-      // Handle unexpected errors
-      console.error("Unknown Error:", error);
-      res.status(500).json({ error: "Unknown Error" });
-    }
+    console.error("Error fetching materials:", error);
+    console.error("Stack Trace:", error.stack);
+    res
+      .status(500)
+      .json({ error: "Error fetching materials", details: error.message });
   }
 });
 
